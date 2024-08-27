@@ -14,7 +14,7 @@
 #define BOTON 4
 
 MFRC522 mfrc522(SS_PIN, RST_PIN);
-LiquidCrystal_I2C lcd(0x27, 16, 2); 
+LiquidCrystal_I2C lcd(0x27, 16, 2);
 
 // UID de la tarjeta maestra
 String masterUID = "5363f0757101";
@@ -23,12 +23,11 @@ bool modoAlta = false;
 bool modoBaja = false;
 
 unsigned long lastButtonPress = 0;
-int buttonPressCount = 0;
-unsigned long debounceTime = 500; 
-unsigned long doublePressInterval = 800; 
+unsigned long debounceTime = 200;
+unsigned long doublePressInterval = 800;
 
 void setup() {
-    Serial.begin(9600); 
+    Serial.begin(9600);
     SPI.begin();
     mfrc522.PCD_Init();
     lcd.init();
@@ -46,21 +45,15 @@ void setup() {
 }
 
 void loop() {
+    detectarModo();
+    verificarAcceso();
+}
+
+void detectarModo() {
     if (digitalRead(BOTON) == HIGH) {
         unsigned long currentTime = millis();
 
         if (currentTime - lastButtonPress < doublePressInterval) {
-            buttonPressCount++;
-        } else {
-            buttonPressCount = 1;
-        }
-
-        lastButtonPress = currentTime;
-
-        delay(debounceTime); 
-
-
-        if (buttonPressCount == 2) {
             modoBaja = true;
             modoAlta = false;
             lcd.clear();
@@ -68,9 +61,7 @@ void loop() {
             lcd.print("Borrar usuario:");
             lcd.setCursor(0, 1);
             lcd.print("Pase la tarjeta");
-            delay(2000); 
-        } 
-        else if (buttonPressCount == 1) {
+        } else {
             modoAlta = true;
             modoBaja = false;
             lcd.clear();
@@ -78,11 +69,11 @@ void loop() {
             lcd.print("Nueva alta:");
             lcd.setCursor(0, 1);
             lcd.print("Pase la tarjeta");
-            delay(2000); 
         }
-    }
 
-    verificarAcceso();
+        lastButtonPress = currentTime;
+        delay(debounceTime);
+    }
 }
 
 void verificarAcceso() {
@@ -95,29 +86,26 @@ void verificarAcceso() {
 
     if (modoAlta) {
         Serial.println("Alta UID: " + uid);
-        lcd.clear();
-        lcd.setCursor(0, 0);
-        lcd.print("Gracias por su");
-        lcd.setCursor(0, 1);
-        lcd.print("confianza");
-        delay(2000); 
 
-        delay(1000);  
+        while (Serial.available() > 0) {
+            Serial.read();
+        }
 
+        delay(500);
         String respuesta = esperarRespuesta();
+        respuesta.trim();
+
         if (respuesta.startsWith("Nuevo UID registrado")) {
             lcd.clear();
             lcd.setCursor(0, 0);
             lcd.print("UID registrado!");
-            delay(2000); 
+            delay(2000);
         } else {
             lcd.clear();
             lcd.setCursor(0, 0);
-            lcd.print("Error al registrar");
-            delay(2000);  
+            lcd.print("Registrando...");
+            delay(2000);
         }
-
-        modoAlta = false; 
 
         lcd.clear();
         lcd.setCursor(0, 0);
@@ -125,53 +113,82 @@ void verificarAcceso() {
         lcd.setCursor(0, 1);
         lcd.print("Estetica Mari");
 
+        modoAlta = false;
+
     } else if (modoBaja) {
         Serial.println("Baja UID: " + uid);
-        lcd.clear();
-        lcd.setCursor(0, 0);
-        lcd.print("Eliminando...");
-        delay(2000);
 
-        delay(1000);
+        while (Serial.available() > 0) {
+            Serial.read();
+        }
+
+        delay(500);
         String respuesta = esperarRespuesta();
+        respuesta.trim();
+
         if (respuesta.startsWith("UID eliminado")) {
             lcd.clear();
             lcd.setCursor(0, 0);
             lcd.print("UID eliminado!");
-            delay(2000); 
+            delay(2000);
         } else {
             lcd.clear();
             lcd.setCursor(0, 0);
-            lcd.print("Error al eliminar");
-            delay(2000); 
+            lcd.print("Eliminando...");
+            delay(2000);
         }
 
-        modoBaja = false;
-
-l
         lcd.clear();
         lcd.setCursor(0, 0);
         lcd.print("Bienvenido a");
         lcd.setCursor(0, 1);
         lcd.print("Estetica Mari");
+
+        modoBaja = false;
+
     } else {
         while (Serial.available() > 0) {
             Serial.read();
         }
 
-        delay(500);  
-
+        delay(500);
         String respuesta = esperarRespuesta();
         respuesta.trim();
 
         if (respuesta.startsWith("Acceso permitido")) {
-            accesoPermitido(respuesta);
+            lcd.clear();
+            lcd.setCursor(0, 0);
+            lcd.print("Tenga buen dia");
+            lcd.setCursor(0, 1);
+            int idx = respuesta.indexOf(":");
+            String nombre = respuesta.substring(idx + 2);
+            lcd.print(nombre);
+            digitalWrite(LED_VERDE, HIGH);
+            digitalWrite(BUZZER, HIGH);
+            delay(3000);
+            digitalWrite(LED_VERDE, LOW);
+            digitalWrite(BUZZER, LOW);
         } else {
-            accesoDenegado();
+            lcd.clear();
+            lcd.setCursor(0, 0);
+            lcd.print("Acceso");
+            lcd.setCursor(0, 1);
+            lcd.print("Denegado");
+            digitalWrite(LED_ROJO, HIGH);
+            digitalWrite(BUZZER, HIGH);
+            delay(4000);
+            digitalWrite(LED_ROJO, LOW);
+            digitalWrite(BUZZER, LOW);
         }
+
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        lcd.print("Bienvenido a");
+        lcd.setCursor(0, 1);
+        lcd.print("Estetica Mari");
     }
 
-    mfrc522.PICC_HaltA(); 
+    mfrc522.PICC_HaltA();
 }
 
 String obtenerUID() {
@@ -185,7 +202,7 @@ String obtenerUID() {
 String esperarRespuesta() {
     String respuesta = "";
     unsigned long startTime = millis();
-    while (millis() - startTime < 1000) { 
+    while (millis() - startTime < 1000) {
         if (Serial.available() > 0) {
             respuesta = Serial.readStringUntil('\n');
             break;
@@ -193,48 +210,3 @@ String esperarRespuesta() {
     }
     return respuesta;
 }
-
-void accesoPermitido(String mensaje) {
-    lcd.clear();
-    lcd.setCursor(0, 0);
-
-    // Dividir el mensaje en 2
-    int idx = mensaje.indexOf(":");
-    String nombre = mensaje.substring(idx + 2);
-    lcd.print("Tenga buen dia");
-    lcd.setCursor(0, 1);
-    lcd.print(nombre);
-
-    digitalWrite(LED_VERDE, HIGH);
-    digitalWrite(BUZZER, HIGH);
-    delay(3000);  
-    digitalWrite(LED_VERDE, LOW);
-    digitalWrite(BUZZER, LOW);
-
-    lcd.clear();
-    lcd.setCursor(0, 0);
-    lcd.print("Bienvenido a");
-    lcd.setCursor(0, 1);
-    lcd.print("Estetica Mari");
-}
-
-void accesoDenegado() {
-    lcd.clear();
-    lcd.setCursor(0, 0);
-    lcd.print("Acceso");
-    lcd.setCursor(0, 1);
-    lcd.print("Denegado");
-
-    digitalWrite(LED_ROJO, HIGH);
-    digitalWrite(BUZZER, HIGH);
-    delay(4000);
-    digitalWrite(LED_ROJO, LOW);
-    digitalWrite(BUZZER, LOW);
-
-    lcd.clear();
-    lcd.setCursor(0, 0);
-    lcd.print("Bienvenido a");
-    lcd.setCursor(0, 1);
-    lcd.print("Estetica Mari");
-}
-
