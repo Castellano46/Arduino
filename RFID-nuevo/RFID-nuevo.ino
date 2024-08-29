@@ -126,7 +126,14 @@ void verificarAcceso() {
         String respuesta = esperarRespuesta();
         respuesta.trim();
 
-        if (respuesta.startsWith("UID eliminado")) {
+        if (respuesta == "UID maestro, no se puede eliminar") {
+            lcd.clear();
+            lcd.setCursor(0, 0);
+            lcd.print("UID maestro");
+            lcd.setCursor(0, 1);
+            lcd.print("no se puede borrar");
+            delay(3000);
+        } else if (respuesta.startsWith("UID eliminado")) {
             lcd.clear();
             lcd.setCursor(0, 0);
             lcd.print("UID eliminado!");

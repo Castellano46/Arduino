@@ -9,8 +9,10 @@ from datetime import datetime
 clientes_file = os.path.join(os.getcwd(), 'clientes.xlsx')
 registros_file = os.path.join(os.getcwd(), 'registros.xlsx')
 
-sheet_name = 'Clientes' 
-registro_sheet = 'Registros' 
+sheet_name = 'Clientes'
+registro_sheet = 'Registros'
+
+master_uid = "5363f0757101"
 
 def recargar_datos():
     global df
@@ -37,12 +39,18 @@ def agregar_cliente_excel(nuevo_cliente):
 def eliminar_cliente_excel(uid):
     global df
     try:
+        # Verificar si se está intentando eliminar el UID maestro
+        if uid == master_uid:
+            print(f"Error: No se puede eliminar el UID maestro ({master_uid}).")
+            return "UID maestro, no se puede eliminar"
+        
         df = pd.read_excel(clientes_file, sheet_name=sheet_name, engine='openpyxl')
         
         df = df[df['UID'] != uid]
         
         df.to_excel(clientes_file, sheet_name=sheet_name, index=False, engine='openpyxl')
         print(f"Cliente con UID {uid} eliminado exitosamente.")
+        return "UID eliminado"
     except Exception as e:
         print(f"Error al eliminar cliente del archivo Excel: {e}")
         exit()
@@ -75,8 +83,6 @@ try:
 except serial.SerialException as e:
     print(f"Error al conectar con el puerto serie: {e}")
     exit()
-
-master_uid = "5363f0757101"
 
 def buscar_nombre_por_uid(uid):
     cliente = df[df['UID'] == uid]
@@ -111,15 +117,12 @@ try:
                 uid_a_borrar = uid.split(":")[1].strip()
                 print(f"Solicitud de eliminación de UID: {uid_a_borrar}")
 
-                if buscar_nombre_por_uid(uid_a_borrar) is None:
-                    ser.write(f"UID no encontrado: {uid_a_borrar}\n".encode('utf-8'))
-                    print(f"Error: El UID {uid_a_borrar} no está registrado.")
-                else:
-                    eliminar_cliente_excel(uid_a_borrar)
+                resultado = eliminar_cliente_excel(uid_a_borrar)
+                ser.write(f"{resultado}\n".encode('utf-8'))
 
-                    ser.write(f"UID eliminado: {uid_a_borrar}\n".encode('utf-8'))
-                    print(f"UID eliminado: {uid_a_borrar}")
-                    
+                if resultado == "UID maestro, no se puede eliminar":
+                    print(f"Intento de eliminar el UID maestro {uid_a_borrar} prevenido.")
+                else:
                     recargar_datos()
 
             elif uid == master_uid:
