@@ -1,27 +1,95 @@
 import tkinter as tk
-from tkinter import ttk, messagebox, simpledialog
+from tkinter import ttk, messagebox
 import pandas as pd
 import threading
-from rfid.RFID import recargar_datos, agregar_cliente_excel, eliminar_cliente_excel, manejar_acceso
+from rfid.RFID import recargar_datos, agregar_cliente_excel, eliminar_cliente_excel, manejar_acceso, iniciar_serial
+import time
+
+def leer_uid(callback):
+    """Función para leer un UID del lector RFID de forma asíncrona."""
+    def tarea_lectura():
+        ser = iniciar_serial()
+        if ser:
+            time.sleep(2)
+            while True:
+                if ser.in_waiting > 0:
+                    uid = ser.readline().decode('utf-8').strip()
+                    if uid:
+                        ser.close()
+                        callback(uid)
+                        return
+                time.sleep(0.1)
+        callback(None)
+
+    hilo_lectura = threading.Thread(target=tarea_lectura)
+    hilo_lectura.start()
 
 def manejar_alta():
-    nuevo_uid = simpledialog.askstring("Alta", "Escanee la tarjeta para dar de alta:")
-    if nuevo_uid:
-        df = recargar_datos()
-        if df[df['UID'] == nuevo_uid].empty:
-            nuevo_nombre = simpledialog.askstring("Alta", "Ingrese el nombre del nuevo usuario:")
-            if nuevo_nombre:
+    """Función para manejar el proceso de alta de un nuevo usuario."""
+    def aceptar_alta():
+        nuevo_uid = entry_uid_var.get()
+        nuevo_nombre = entry_nombre.get()
+        if nuevo_uid and nuevo_nombre:
+            df = recargar_datos()
+            if df[df['UID'] == nuevo_uid].empty:
                 nuevo_cliente = pd.DataFrame({'UID': [nuevo_uid], 'Nombre': [nuevo_nombre]})
                 agregar_cliente_excel(nuevo_cliente)
                 messagebox.showinfo("Alta", f"Nuevo UID registrado: {nuevo_uid} con el nombre: {nuevo_nombre}")
+                ventana_alta.destroy()
+            else:
+                messagebox.showwarning("Error", f"UID {nuevo_uid} ya está registrado.")
+                ventana_alta.destroy()
+
+    def cancelar_alta():
+        ventana_alta.destroy()
+
+    def procesar_uid(uid):
+        if uid:
+            entry_uid_var.set(uid)
+            entry_nombre.config(state='normal')
+            btn_aceptar.config(state='normal')
+            lbl_status.config(text="Tarjeta detectada. Ingrese el nombre del usuario.")
         else:
-            messagebox.showwarning("Error", f"UID {nuevo_uid} ya está registrado.")
+            messagebox.showerror("Error", "No se pudo leer el UID. Intente de nuevo.")
+            ventana_alta.destroy()
+
+    ventana_alta = tk.Toplevel(root)
+    ventana_alta.title("Dar de alta")
+    ventana_alta.geometry("400x200")
+
+    lbl_instruccion = tk.Label(ventana_alta, text="Pase su tarjeta", font=("Arial", 12))
+    lbl_instruccion.pack(pady=10)
+
+    entry_uid_var = tk.StringVar()
+    entry_uid = tk.Entry(ventana_alta, textvariable=entry_uid_var, state='readonly', justify='center', font=("Arial", 12))
+    entry_uid.pack(pady=10)
+
+    lbl_nombre = tk.Label(ventana_alta, text="Nombre del usuario:", font=("Arial", 12))
+    lbl_nombre.pack(pady=10)
+
+    entry_nombre = tk.Entry(ventana_alta, state='disabled', justify='center', font=("Arial", 12))
+    entry_nombre.pack(pady=10)
+
+    lbl_status = tk.Label(ventana_alta, text="Esperando lectura de tarjeta...", font=("Arial", 10))
+    lbl_status.pack(pady=5)
+
+    btn_aceptar = tk.Button(ventana_alta, text="Aceptar", state='disabled', command=aceptar_alta)
+    btn_aceptar.pack(side='left', padx=20, pady=20)
+
+    btn_cancelar = tk.Button(ventana_alta, text="Cancelar", command=cancelar_alta)
+    btn_cancelar.pack(side='right', padx=20, pady=20)
+
+    leer_uid(procesar_uid)
 
 def manejar_baja():
-    uid_a_borrar = simpledialog.askstring("Baja", "Escanee la tarjeta para dar de baja:")
-    if uid_a_borrar:
-        resultado = eliminar_cliente_excel(uid_a_borrar)
-        messagebox.showinfo("Baja", resultado)
+    def procesar_uid_baja(uid):
+        if uid:
+            resultado = eliminar_cliente_excel(uid)
+            messagebox.showinfo("Baja", resultado)
+        else:
+            messagebox.showerror("Error", "No se pudo leer el UID. Intente de nuevo.")
+
+    leer_uid(procesar_uid_baja)
 
 def mostrar_clientes():
     df_clientes = recargar_datos()
