@@ -4,22 +4,36 @@ import pandas as pd
 import threading
 from rfid.RFID import recargar_datos, agregar_cliente_excel, eliminar_cliente_excel, manejar_acceso, iniciar_serial
 import time
+import sys
+import os
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'rfid')))
+
+serial_lock = threading.Lock()
 
 def leer_uid(callback):
-    """Función para leer un UID del lector RFID de forma asíncrona."""
+    """Función para leer un UID del lector RFID y pasar el resultado al callback."""
     def tarea_lectura():
-        ser = iniciar_serial()
-        if ser:
-            time.sleep(2)
-            while True:
-                if ser.in_waiting > 0:
-                    uid = ser.readline().decode('utf-8').strip()
-                    if uid:
-                        ser.close()
-                        callback(uid)
-                        return
-                time.sleep(0.1)
-        callback(None)
+        with serial_lock:
+            ser = iniciar_serial()
+            if ser:
+                try:
+                    time.sleep(2) 
+                    if ser.in_waiting > 0:
+                        uid = ser.readline().decode('utf-8').strip()
+                        if uid:
+                            root.after(0, callback, uid)
+                        else:
+                            root.after(0, callback, None)
+                    else:
+                        root.after(0, callback, None)
+                except Exception as e:
+                    print(f"Error durante la lectura del UID: {e}")
+                    root.after(0, callback, None)
+                finally:
+                    ser.close()
+            else:
+                root.after(0, callback, None)
 
     hilo_lectura = threading.Thread(target=tarea_lectura)
     hilo_lectura.start()
