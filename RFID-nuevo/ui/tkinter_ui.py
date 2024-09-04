@@ -18,7 +18,7 @@ def leer_uid(callback):
             ser = iniciar_serial()
             if ser:
                 try:
-                    time.sleep(2) 
+                    time.sleep(2)
                     if ser.in_waiting > 0:
                         uid = ser.readline().decode('utf-8').strip()
                         if uid:
