@@ -1,0 +1,3 @@
+[console_scripts]
+cbor_eeprom = eeprom.cbor_eeprom:main
+
